@@ -2,19 +2,20 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Web;
 using System.Web.Mvc;
 using JabberBCIT.Models;
+using System.Data;
+using System.Data.SqlClient;
 
 namespace JabberBCIT.Controllers
 {
-    // [Authorize] Uncommenting this makes it so you have to login to view the forums
+    //[Authorize] 
     public class ForumController : Controller
     {
         ChitterDbContext db = ChitterDbContext.Create;
 
         // GET: Forum
-        public ActionResult Index(string tag)
+        public ActionResult Index(string tag = "Global")
         {
             if (db.Subforums.Any(x => x.Name == tag))
             {
@@ -37,6 +38,69 @@ namespace JabberBCIT.Controllers
             }
             return new EmptyResult();
         }
+		
+		/// <summary>
+        /// Display create subforum view.
+        /// </summary>
+        /// <returns></returns>
+        public ActionResult CreateSubForum()
+        {
+            return View();
+        }
+        /// <summary>
+        /// Creates subforum and adds to database.
+        /// </summary>
+        /// <param name="model"></param>
+        /// <returns></returns>
+        [HttpPost]
+        public ActionResult CreateSubForum(CreateSubForumViewModel model)
+        {
+            //if modelstate is valid
+            if (ModelState.IsValid)
+            {
+                //create subforum off model
+                var subforum = new Subforum
+                {
+                    Name = model.Name
+                };
+
+                //get all subforums in db
+                var currentsubforums = db.Subforums.ToList();
+                // the subforum id we are going to assign
+                int newId = 1;
+                //loop through subforums
+                foreach (Subforum s in currentsubforums)
+                {
+                    ++newId;
+                    //if existing subforum name equals subforum name to be inserted
+                    if (s.Name == subforum.Name)
+                    {
+                        //display error
+                        ViewBag.CreateSubForumError = "Subforum name already exists";
+                        //return view with error messages
+                        return View(model);
+                    }
+                }
+                //attempt to insert into db
+                try
+                {
+                    subforum.SubforumID = newId;
+                    db.Subforums.Add(subforum);
+                    db.SaveChanges();
+                }
+                catch
+                {
+                    //return white screen
+                    return new EmptyResult();
+                }
+                //redirect subforum view
+                return RedirectToAction("Index", new { tag = subforum.Name });
+            }
+            //if modelstate failed, return view with error messages
+            return View(model);
+        }
+		
+		
 
         public int sortFunction(PostViewModel p1, PostViewModel p2)
         {
@@ -52,6 +116,7 @@ namespace JabberBCIT.Controllers
         {
             return View();
         }
+
         [HttpPost]
         public ActionResult CreatePost(ForumPost post, string tag)
         {
@@ -70,20 +135,95 @@ namespace JabberBCIT.Controllers
             return RedirectToAction(post.Subforum.Name, new { id = post.PostID });
         }
 
+        public ActionResult DeletePost(long id)
+        {
+            return View(db.ForumPosts.Find(id));
+        }
+
+        [HttpPost]
+        public ActionResult DeletePost(string tag, long id)
+        {
+            DataTable dtNames = new DataTable();
+            string sqlQuery = "delete from ForumPosts where PostID = '" + id + "'";
+            string connectionString = System.Configuration.ConfigurationManager.ConnectionStrings["ChitterContext"].ConnectionString;
+            try
+            {
+                SqlConnection conn = new SqlConnection(connectionString);
+                SqlDataAdapter da = new SqlDataAdapter(sqlQuery, conn);
+                da.Fill(dtNames);
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+            /*
+            try
+            {
+                db.ForumPosts.Remove(db.ForumPosts.Find(id));
+                db.SaveChanges();
+            }
+            catch
+            {
+                return new EmptyResult();
+            }
+            */
+            return RedirectToAction( tag , "Forum");
+        }
+
         public ActionResult CreateComment()
         {
             return View();
         }
+
         [HttpPost]
         public ActionResult CreateComment(Comment comment, long? commentID, long id)
         {
-            try
             {
                 comment.UserID = User.Identity.GetUserId();
                 comment.PostTimestamp = DateTime.Now;
                 comment.PostID = id;
                 comment.ParentCommentID = commentID;
                 db.Comments.Add(comment);
+                db.SaveChanges();
+
+                Notification n = new Notification()
+                { // we can build the link to this post in here
+                    ObjectID = comment.ForumPost.Subforum.Name + '/' + comment.ForumPost.PostID.ToString(),
+                    Type = "Comment",
+                    Text = new string(comment.Text.Take(30).ToArray()),
+                };
+
+                // if this is a child comment
+                if (comment.ParentCommentID != null)
+                {
+                    // the userid associated with this comment is the 
+                    // user of the parent comment's id
+                    n.UserID = db.Comments.Find(comment.ParentCommentID).User.Id;
+                }
+                else // this is replying to the main post
+                {
+                    n.UserID = comment.ForumPost.UserID;
+                }
+                db.Notifications.Add(n);
+
+                db.SaveChanges();
+            }
+
+            return RedirectToAction("ViewThread");
+        }
+
+        public ActionResult DeleteComment(long? commentID)
+        {
+            return View(db.Comments.Find(commentID));
+        }
+
+        [HttpPost]
+        public ActionResult DeleteComment(long? commentID, long id)
+        {
+            
+            try
+            {
+                db.Comments.Find(commentID).Hidden = 1;
                 db.SaveChanges();
             }
             catch
@@ -93,7 +233,7 @@ namespace JabberBCIT.Controllers
             return RedirectToAction("ViewThread");
         }
 
-        public ActionResult ViewThread(long id)
+                public ActionResult ViewThread(long id)
         {
             if (db.ForumPosts.Any(x => x.PostID == id))
             {
@@ -106,7 +246,7 @@ namespace JabberBCIT.Controllers
             }
             return new EmptyResult();
         }
-
+        
         List<CommentViewModel> getCommentTree(long basePostID)
         {
             List<CommentViewModel> model = new List<CommentViewModel>();

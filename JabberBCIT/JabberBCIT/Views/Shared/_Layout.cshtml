@@ -7,6 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@ViewBag.Title - Jabber</title>
+   
     @Styles.Render("~/Content/css")
     @Styles.Render("~/Content/login")
     @Styles.Render("~/Content/notification")
@@ -15,6 +16,14 @@
     @Styles.Render("~/Content/forgetPassword.css")
     @Scripts.Render("~/bundles/modernizr")
     @Styles.Render("~/Content/Profile.css")
+    @Scripts.Render("~/bundles/jquery")
+    @Scripts.Render("~/bundles/bootstrap")
+    @Scripts.Render("~/bundles/login")
+    @Scripts.Render("~/Scripts/site.js")
+    @RenderSection("scripts", required: false)
+
+    @Scripts.Render("~/Scripts/comment.js")
+
 </head>
 <body class="body-content">
     <div class="navbar navbar-inverse navbar-fixed-top">
@@ -170,7 +179,6 @@
                     <li>@Html.ActionLink("About", "About", "Home")</li>
                     <li>@Html.ActionLink("Chat", "Chat", "Chat")</li>
                     <li>@Html.ActionLink("Contact", "Contact", "Home")</li>
-                    <li>@Html.ActionLink("Chat", "BasicChat", "Home")</li>
                 </ul>
                 @Html.Partial("_LoginPartial", new JabberBCIT.Models.LoginViewModel { })
             </div>
